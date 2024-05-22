@@ -15,7 +15,7 @@ from everyvoice.config.text_config import TextConfig
 from everyvoice.config.type_definitions import TargetTrainingTextRepresentationLevel
 from everyvoice.config.utils import load_partials
 from everyvoice.utils import load_config_from_json_or_yaml_path
-from pydantic import Field, FilePath, ValidationInfo, model_validator
+from pydantic import Field, FilePath, ValidationInfo, field_serializer, model_validator
 
 
 class DFAlignerExtractionMethod(Enum):
@@ -34,6 +34,12 @@ class DFAlignerModelConfig(ConfigModel):
         512, description="The number of dimensions in the convolutional layers."
     )
 
+    @field_serializer("target_text_representation_level")
+    def convert_training_enum(
+        self, target_text_representation_level: TargetTrainingTextRepresentationLevel
+    ):
+        return target_text_representation_level.value
+
 
 class DFAlignerTrainingConfig(BaseTrainingConfig):
     optimizer: AdamOptimizer | AdamWOptimizer = Field(
@@ -46,6 +52,12 @@ class DFAlignerTrainingConfig(BaseTrainingConfig):
         DFAlignerExtractionMethod.dijkstra,
         description="The alignment extraction algorithm to use. 'beam' will be quicker but possibly less accurate than 'dijkstra'",
     )
+
+    @field_serializer("extraction_method")
+    def convert_extraction_method_enum(
+        self, extraction_method: DFAlignerExtractionMethod
+    ):
+        return extraction_method.value
 
 
 class DFAlignerConfig(BaseModelWithContact):
