@@ -37,6 +37,8 @@ class BatchNormConv(nn.Module):
 
 
 class Aligner(pl.LightningModule):
+    _VERSION: str = "1.0"
+
     def __init__(
         self,
         config: dict | DFAlignerConfig,
@@ -95,16 +97,52 @@ class Aligner(pl.LightningModule):
         x = self.lin(x)
         return x
 
+    def check_and_upgrade_checkpoint(self, checkpoint):
+        """
+        Check model's compatibility and possibly upgrade.
+        """
+        model_info = checkpoint.get(
+            "model_info",
+            {
+                "name": self.__class__.__name__,
+                "version": "1.0",
+            },
+        )
+
+        ckpt_model_type = model_info.get("name", "MISSING_TYPE")
+        if ckpt_model_type != Aligner.__name__:
+            raise TypeError(
+                f"""Wrong model type ({ckpt_model_type}), we are expecting a '{ Aligner.__name__ }' model"""
+            )
+
+        ckpt_version = model_info.get("version", "0.0")
+        if ckpt_version > self._VERSION:
+            raise ValueError(
+                "Your model was created with a newer version of EveryVoice, please update your software."
+            )
+        # Successively convert model checkpoints to newer version.
+        if ckpt_version < "1.0":
+            # TODO: Write code to convert model to version 1.0.
+            pass
+
+        return checkpoint
+
     def on_load_checkpoint(self, checkpoint):
         """Deserialize the checkpoint hyperparameters.
         Note, this shouldn't fail on different versions of pydantic anymore,
         but it will fail on breaking changes to the config. We should catch those exceptions
         and handle them appropriately."""
+        checkpoint = self.check_and_upgrade_checkpoint(checkpoint)
+
         self.config = AlignerConfig(**checkpoint["hyper_parameters"]["config"])
 
     def on_save_checkpoint(self, checkpoint):
         """Serialize the checkpoint hyperparameters"""
         checkpoint["hyper_parameters"]["config"] = self.config.model_checkpoint_dump()
+        checkpoint["model_info"] = {
+            "name": self.__class__.__name__,
+            "version": self._VERSION,
+        }
 
     def configure_optimizers(self):
         optim = torch.optim.AdamW(
